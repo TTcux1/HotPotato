@@ -1,0 +1,78 @@
+# Готовая арена для плоского мира (LEVEL_TYPE=FLAT): поверхность на высоте -60.
+# Лобби в центре, 8 точек появления по кругу радиусом 12 блоков лицом к центру.
+# Мир ограничен границей 48×48 (команды RCON_CMDS_STARTUP в docker-compose и Kubernetes).
+arenas:
+  main:
+    lobby:
+      ==: org.bukkit.Location
+      world: world
+      x: 0.5
+      y: -60.0
+      z: 0.5
+      pitch: 0.0
+      yaw: 0.0
+    spawns:
+      '0':
+        ==: org.bukkit.Location
+        world: world
+        x: 12.5
+        y: -60.0
+        z: 0.5
+        pitch: 0.0
+        yaw: 90.0
+      '1':
+        ==: org.bukkit.Location
+        world: world
+        x: 9.0
+        y: -60.0
+        z: 9.0
+        pitch: 0.0
+        yaw: 135.0
+      '2':
+        ==: org.bukkit.Location
+        world: world
+        x: 0.5
+        y: -60.0
+        z: 12.5
+        pitch: 0.0
+        yaw: 180.0
+      '3':
+        ==: org.bukkit.Location
+        world: world
+        x: -8.0
+        y: -60.0
+        z: 9.0
+        pitch: 0.0
+        yaw: -135.0
+      '4':
+        ==: org.bukkit.Location
+        world: world
+        x: -11.5
+        y: -60.0
+        z: 0.5
+        pitch: 0.0
+        yaw: -90.0
+      '5':
+        ==: org.bukkit.Location
+        world: world
+        x: -8.0
+        y: -60.0
+        z: -8.0
+        pitch: 0.0
+        yaw: -45.0
+      '6':
+        ==: org.bukkit.Location
+        world: world
+        x: 0.5
+        y: -60.0
+        z: -11.5
+        pitch: 0.0
+        yaw: -0.0
+      '7':
+        ==: org.bukkit.Location
+        world: world
+        x: 9.0
+        y: -60.0
+        z: -8.0
+        pitch: 0.0
+        yaw: 45.0

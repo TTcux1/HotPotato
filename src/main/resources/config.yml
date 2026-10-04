@@ -1,0 +1,39 @@
+# Горячая картошка — настройки игры.
+
+game:
+  min-players: 2
+  max-players: 16
+  # Отсчёт в лобби, когда набралось min-players.
+  countdown-seconds: 15
+
+  fuse:
+    # Фитиль в первом раунде; каждый следующий раунд короче на step-seconds,
+    # но не короче min-seconds. Игра постепенно ускоряется.
+    initial-seconds: 30
+    step-seconds: 3
+    min-seconds: 10
+
+  # Одна картошка на столько живых игроков (16 игроков = 4 картошки одновременно).
+  players-per-potato: 4
+
+  # Сколько тиков после получения картошку нельзя передать (20 тиков = 1 секунда).
+  receive-cooldown-ticks: 10
+  # Сколько тиков нельзя вернуть картошку тому, кто её только что передал.
+  no-tag-back-ticks: 40
+  # Передача в последние N тиков фитиля засчитывается как «клатч».
+  clutch-window-ticks: 20
+
+  # Пауза между раундами.
+  intermission-seconds: 3
+
+# Выделенный сервер: каждый зашедший игрок автоматически попадает на эту арену.
+# Пусто — выключено. Переменная окружения HOTPOTATO_AUTO_JOIN_ARENA важнее.
+auto-join-arena: ''
+
+# Переменные окружения HOTPOTATO_MONGODB_URI и HOTPOTATO_MONGODB_DATABASE
+# важнее этих настроек: так база подключается в Docker и Kubernetes.
+mongodb:
+  # Выключено: статистика хранится в памяти до перезапуска сервера.
+  enabled: false
+  uri: 'mongodb://localhost:27017'
+  database: 'hotpotato'

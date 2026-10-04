@@ -1,0 +1,60 @@
+# Локальный запуск: игровой сервер + MongoDB одной командой.
+#
+#   cp .env.example .env      # задай пароль базы
+#   docker compose up --build
+#
+# Подключение: localhost:25565. Консоль сервера: docker compose attach minecraft.
+
+services:
+  mongo:
+    image: mongo:7.0
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-hotpotato}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:?Задай MONGO_PASSWORD в файле .env}
+    # Только для локальной машины: удобно смотреть статистику через MongoDB Compass.
+    ports:
+      - "127.0.0.1:27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  minecraft:
+    build: .
+    image: hotpotato-server:local
+    restart: unless-stopped
+    # Сервер стартует только когда база готова принимать подключения.
+    depends_on:
+      mongo:
+        condition: service_healthy
+    ports:
+      - "25565:25565"
+    environment:
+      # Запуская сервер, ты принимаешь Minecraft EULA: https://aka.ms/MinecraftEULA
+      EULA: "TRUE"
+      MEMORY: 2G
+      HOTPOTATO_MONGODB_URI: mongodb://${MONGO_USER:-hotpotato}:${MONGO_PASSWORD}@mongo:27017/?authSource=admin
+      HOTPOTATO_MONGODB_DATABASE: hotpotato
+      # Выполняются при каждом старте: граница арены и вечный день.
+      RCON_CMDS_STARTUP: |-
+        worldborder center 0 0
+        worldborder set 48
+        setworldspawn 0 -60 0
+        gamerule doDaylightCycle false
+        gamerule doWeatherCycle false
+        gamerule announceAdvancements false
+        time set day
+    volumes:
+      - mc-data:/data
+    # Чтобы можно было подключиться к консоли сервера.
+    stdin_open: true
+    tty: true
+
+volumes:
+  mongo-data:
+  mc-data:

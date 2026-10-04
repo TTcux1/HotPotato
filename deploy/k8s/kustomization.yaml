@@ -1,0 +1,25 @@
+# Развёртывание: kubectl apply -k deploy/k8s
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: hotpotato
+
+resources:
+  - namespace.yaml
+  - mongo.yaml
+  - minecraft.yaml
+  - network-policy.yaml
+
+# Секрет генерируется из файла mongo.env (не коммитится в git).
+# Создай его по образцу: cp mongo.env.example mongo.env
+secretGenerator:
+  - name: mongo-credentials
+    envs:
+      - mongo.env
+
+# Образ, который собирает и публикует GitHub Actions.
+# Образ публикует GitHub Actions из репозитория TTcux1/HotPotato.
+images:
+  - name: hotpotato-server
+    newName: ghcr.io/ttcux1/hotpotato-server
+    newTag: latest

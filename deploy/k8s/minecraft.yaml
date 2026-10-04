@@ -1,0 +1,170 @@
+# Игровой сервер «Горячая картошка».
+# StatefulSet: у сервера мир на постоянном диске, а при перезапуске под
+# должен получить тот же диск обратно.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: minecraft-config
+  labels:
+    app.kubernetes.io/name: minecraft
+    app.kubernetes.io/part-of: hotpotato
+data:
+  # Запуская сервер, ты принимаешь Minecraft EULA: https://aka.ms/MinecraftEULA
+  EULA: "TRUE"
+  MEMORY: "1536M"
+  HOTPOTATO_MONGODB_DATABASE: hotpotato
+  HOTPOTATO_AUTO_JOIN_ARENA: main
+  RCON_CMDS_STARTUP: |-
+    worldborder center 0 0
+    worldborder set 48
+    setworldspawn 0 -60 0
+    gamerule doDaylightCycle false
+    gamerule doWeatherCycle false
+    gamerule announceAdvancements false
+    time set day
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: minecraft
+  labels:
+    app.kubernetes.io/name: minecraft
+    app.kubernetes.io/part-of: hotpotato
+spec:
+  # В облаке выдаст внешний IP. Для minikube/kind используй NodePort
+  # или: kubectl -n hotpotato port-forward svc/minecraft 25565:25565
+  type: LoadBalancer
+  selector:
+    app.kubernetes.io/name: minecraft
+  ports:
+    - name: minecraft
+      port: 25565
+      targetPort: minecraft
+---
+# Headless-сервис для StatefulSet: стабильные DNS-имена подов
+# (minecraft-0.minecraft-headless). Пригодится, когда серверы встанут за прокси.
+apiVersion: v1
+kind: Service
+metadata:
+  name: minecraft-headless
+  labels:
+    app.kubernetes.io/name: minecraft
+    app.kubernetes.io/part-of: hotpotato
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: minecraft
+  ports:
+    - name: minecraft
+      port: 25565
+      targetPort: minecraft
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: minecraft
+  labels:
+    app.kubernetes.io/name: minecraft
+    app.kubernetes.io/part-of: hotpotato
+spec:
+  serviceName: minecraft-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: minecraft
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: minecraft
+        app.kubernetes.io/part-of: hotpotato
+    spec:
+      # Сервер сохраняет мир по SIGTERM; даём ему на это время.
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      # Не стартуем сервер, пока база не отвечает.
+      initContainers:
+        - name: wait-for-mongo
+          image: mongo:7.0
+          env:
+            - name: MONGO_USER
+              valueFrom:
+                secretKeyRef:
+                  name: mongo-credentials
+                  key: username
+            - name: MONGO_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mongo-credentials
+                  key: password
+          command:
+            - sh
+            - -c
+            - |
+              until mongosh "mongodb://$MONGO_USER:$MONGO_PASSWORD@mongo-0.mongo:27017/?authSource=admin" \
+                  --quiet --eval "db.adminCommand('ping').ok" > /dev/null 2>&1; do
+                echo "Жду MongoDB..."; sleep 3
+              done
+      containers:
+        - name: minecraft
+          # Kustomize подставит реальный образ (см. images в kustomization.yaml).
+          image: hotpotato-server
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: minecraft
+              containerPort: 25565
+          envFrom:
+            - configMapRef:
+                name: minecraft-config
+          env:
+            - name: MONGO_USER
+              valueFrom:
+                secretKeyRef:
+                  name: mongo-credentials
+                  key: username
+            - name: MONGO_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mongo-credentials
+                  key: password
+            # $(VAR) подставляет Kubernetes из переменных, объявленных выше.
+            - name: HOTPOTATO_MONGODB_URI
+              value: mongodb://$(MONGO_USER):$(MONGO_PASSWORD)@mongo-0.mongo:27017/?authSource=admin
+          # Первый старт скачивает Paper и генерирует мир: даём до 5 минут.
+          startupProbe:
+            exec:
+              command: ["mc-health"]
+            periodSeconds: 10
+            failureThreshold: 30
+          readinessProbe:
+            exec:
+              command: ["mc-health"]
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["mc-health"]
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: 500m
+              memory: 2Gi
+            limits:
+              # Куча JVM 1536M (MEMORY) + запас на нативную память JVM.
+              memory: 2Gi
+          volumeMounts:
+            - name: data
+              mountPath: /data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi

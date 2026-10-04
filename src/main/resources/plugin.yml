@@ -1,0 +1,23 @@
+name: HotPotato
+version: '${version}'
+main: dev.hotpotato.plugin.HotPotatoPlugin
+api-version: '1.21'
+description: Мини-игра «Горячая картошка»
+authors: [ "${author}" ]
+
+# Paper сам скачает эти библиотеки из Maven Central при первом запуске,
+# поэтому jar остаётся маленьким и без шейдинга.
+libraries:
+  - org.jetbrains.kotlin:kotlin-stdlib:${kotlinVersion}
+  - org.mongodb:mongodb-driver-sync:${mongoVersion}
+
+commands:
+  hotpotato:
+    description: Горячая картошка
+    usage: /<command> join [арена] | leave | stats [ник] | top
+    aliases: [ hp, potato ]
+
+permissions:
+  hotpotato.admin:
+    description: Настройка арен и принудительный старт
+    default: op
