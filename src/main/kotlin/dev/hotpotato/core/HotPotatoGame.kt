@@ -59,6 +59,12 @@ class HotPotatoGame(
     val secondsLeft: Int
         get() = ceilSeconds(phaseTicksLeft)
 
+    /** Тиков до конца текущей фазы (фитиля в раунде, отсчёта в лобби). */
+    val ticksLeft: Int get() = phaseTicksLeft
+
+    /** Полная длина фитиля текущего раунда в тиках. */
+    val fuseTotal: Int get() = fuseTotalTicks
+
     // ------------------------------------------------------------------ участники
 
     fun join(player: UUID): JoinResult {

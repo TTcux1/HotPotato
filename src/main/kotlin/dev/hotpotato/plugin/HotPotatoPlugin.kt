@@ -28,7 +28,8 @@ class HotPotatoPlugin : JavaPlugin() {
         stats = connectStats()
 
         arenas = ArenaStore(File(dataFolder, "arenas.yml"), logger).apply { load() }
-        sessions = SessionManager(this, { rules }, { stats })
+        val hud = HudBridge(this).apply { register() }
+        sessions = SessionManager(this, { rules }, { stats }, hud)
 
         server.pluginManager.registerEvents(GameListener(sessions), this)
 

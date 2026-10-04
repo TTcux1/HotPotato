@@ -4,6 +4,7 @@ import dev.hotpotato.core.GameEvent
 import dev.hotpotato.core.GameResult
 import dev.hotpotato.core.GameRules
 import dev.hotpotato.core.HotPotatoGame
+import dev.hotpotato.core.HudWire
 import dev.hotpotato.core.JoinResult
 import dev.hotpotato.core.PassResult
 import net.kyori.adventure.bossbar.BossBar
@@ -22,11 +23,12 @@ import java.util.UUID
 
 /**
  * Одна идущая игра на арене. Переводит события ядра в то, что видит игрок:
- * телепорты, предметы, звуки, частицы, боссбар.
+ * телепорты, предметы, звуки, частицы, боссбар, а игрокам с модом — данные для HUD.
  */
 class GameSession(
     val arena: Arena,
     private val rules: GameRules,
+    private val hud: HudBridge,
     private val onFinished: (GameSession, GameResult, Map<UUID, String>) -> Unit,
 ) {
     private var game = HotPotatoGame(rules)
@@ -38,6 +40,9 @@ class GameSession(
 
     /** Тиков до сброса арены после окончания игры. */
     private var resetTicksLeft = -1
+
+    /** Тиков до следующей отправки состояния моду: раз в секунду. */
+    private var hudSyncTicks = 0
 
     val playerCount: Int get() = game.players.size
     val phase: HotPotatoGame.Phase get() = game.phase
@@ -91,6 +96,7 @@ class GameSession(
         }
         handle(game.tick())
         updateBossBar()
+        if (--hudSyncTicks <= 0) syncHud()
         return false
     }
 
@@ -142,6 +148,48 @@ class GameSession(
 
                 is GameEvent.GameFinished -> onGameFinished(event.result)
             }
+            forwardToHud(event)
+        }
+        // Что-то изменилось — мод получает новое состояние сразу, не дожидаясь секунды.
+        if (events.isNotEmpty()) syncHud()
+    }
+
+    // ------------------------------------------------------------------ клиентский HUD
+
+    private fun forwardToHud(event: GameEvent) {
+        val bytes = when (event) {
+            is GameEvent.RoundStarted -> HudWire.roundStarted(event.round, event.fuseSeconds, event.holders.size)
+            is GameEvent.PotatoPassed -> HudWire.passed(name(event.from), name(event.to), event.clutch)
+            is GameEvent.Exploded -> HudWire.exploded(event.players.map(::name), event.aliveLeft)
+            is GameEvent.GameFinished -> HudWire.finished(event.result.winner?.let(::name), event.result.rounds)
+            else -> return
+        }
+        hud.broadcast(online(), bytes)
+    }
+
+    /**
+     * Состояние каждому игроку отдельно: у каждого своё «картошка у тебя».
+     * Заодно переключаем боссбар: у кого мод — тому он не нужен.
+     */
+    private fun syncHud() {
+        hudSyncTicks = 20
+        val holders = game.potatoHolders.map(::name)
+        for (player in online()) {
+            if (!hud.hasMod(player)) {
+                player.showBossBar(bossBar)
+                continue
+            }
+            player.hideBossBar(bossBar)
+            hud.send(player, HudWire.state(
+                phase = game.phase,
+                round = game.round,
+                fuseTicksLeft = game.ticksLeft,
+                fuseTotalTicks = game.fuseTotal,
+                alive = game.alivePlayers.size,
+                players = game.players.size,
+                youHold = game.isHolder(player.uniqueId),
+                holders = holders,
+            ))
         }
     }
 
@@ -243,6 +291,7 @@ class GameSession(
 
     private fun restore(player: Player) {
         player.hideBossBar(bossBar)
+        hud.send(player, HudWire.hide())
         snapshots.remove(player.uniqueId)?.restore(player)
     }
 

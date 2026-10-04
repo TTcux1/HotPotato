@@ -14,6 +14,7 @@ class SessionManager(
     private val plugin: Plugin,
     private val rules: () -> GameRules,
     private val stats: () -> StatsRepository,
+    private val hud: HudBridge,
 ) {
     private val sessions = LinkedHashMap<String, GameSession>()
 
@@ -31,7 +32,7 @@ class SessionManager(
         if (!arena.isReady) return JoinOutcome.ArenaNotReady
         if (sessionOf(player) != null) return JoinOutcome.AlreadyInGame
 
-        val session = sessions.getOrPut(arena.name) { GameSession(arena, rules(), ::onFinished) }
+        val session = sessions.getOrPut(arena.name) { GameSession(arena, rules(), hud, ::onFinished) }
         return when (session.join(player)) {
             is JoinResult.Joined -> JoinOutcome.Joined(session)
             JoinResult.AlreadyJoined -> JoinOutcome.AlreadyInGame
